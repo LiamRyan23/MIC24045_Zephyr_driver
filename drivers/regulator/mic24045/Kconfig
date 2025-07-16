@@ -7,4 +7,11 @@ config REGULATOR_MIC24045
     help
       Enable support for the Microchip MIC24045 regulator.
 
+config REGULATOR_MIC24045_INIT_PRIORITY
+    int "MIC24045 regulator init priority"
+    depends on REGULATOR_MIC24045
+    default 85
+    help
+      Init priority for the MIC24045 regulator driver. It must be
+      greater than I2C_INIT_PRIORITY.
 

@@ -9,21 +9,29 @@
 
 #include <zephyr/device.h>
 #include <zephyr/drivers/i2c.h>
+#include <zephyr/drivers/regulator.h>
 
 // MIC24045 register addresses
+#define MIC24045_REG_STATUS         0x00
+#define MIC24045_REG_SETTINGS1      0x01
 #define MIC24045_REG_SETTINGS2      0x02
 #define MIC24045_REG_VOUT           0x03
 #define MIC24045_REG_COMMAND        0x04
 
 // Define step and range — placeholder values, adjust per datasheet
-#define MIC24045_MIN_CURRENT_MA     500
-#define MIC24045_MAX_CURRENT_MA     5000
-#define MIC24045_CURRENT_STEP_MA    500
+#define MIC24045_MIN_CURRENT_UA     2000000
+#define MIC24045_MAX_CURRENT_UA     5000000
+#define MIC24045_CURRENT_STEP_UA    1000000
+
+
+#define MIC24045_ILIM_SHIFT         6
+#define MIC24045_ILIM_MASK          (0x03 << MIC24045_ILIM_SHIFT)
 
 // MIC24045 commands
 #define MIC24045_CIFF               0x01
 
 struct mic24045_config {
+    struct regulator_common_config common;
     struct i2c_dt_spec i2c;
 };
 

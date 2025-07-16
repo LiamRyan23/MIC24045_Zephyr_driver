@@ -35,6 +35,18 @@ properties:
     type: phandle
     required: false
     description: Input voltage supply
+  regulator-min-microvolt:
+    default: 640000
+    description: Minimum voltage in microvolts (0.64V)
+  regulator-max-microvolt:
+    default: 5250000
+    description: Maximum voltage in microvolts (5.25V)
+  regulator-min-microamp:
+    default: 500000
+    description: Minimum current in microamps (0.5A)
+  regulator-max-microamp:
+    default: 5000000
+    description: Maximum current in microamps (5A)
 
 # Example usage in devicetree:
 #   mic24045@50 {

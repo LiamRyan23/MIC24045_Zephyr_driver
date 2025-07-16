@@ -1,1 +1,1 @@
-add_subdirectory_ifdef(CONFIG_MIC24045 mic24045)
+add_subdirectory_ifdef(CONFIG_REGULATOR_MIC24045 mic24045)

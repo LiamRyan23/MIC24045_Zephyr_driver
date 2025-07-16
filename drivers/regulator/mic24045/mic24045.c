@@ -35,10 +35,25 @@ static float vout_reg_to_float(uint8_t reg)
 static int mic24045_set_voltage(const struct device *dev, int min_uv, int max_uv)
 {
     const struct mic24045_config *cfg = dev->config;
+    int ret;
+
     float v_target = min_uv / 1e6f;
     uint8_t reg_val = float_to_vout_reg(v_target);
 
-    return i2c_reg_write_byte_dt(&cfg->i2c, MIC24045_REG_VOUT, reg_val);
+    // Write the voltage setting to VOUT register
+    ret = i2c_reg_write_byte_dt(&cfg->i2c, MIC24045_REG_VOUT, reg_val);
+    if (ret < 0) {
+        return ret;
+    }
+
+    // According to MIC24045 datasheet, we may need to send a command to apply the setting
+    // The CIFF (Command Interface) bit might need to be set
+    ret = i2c_reg_write_byte_dt(&cfg->i2c, MIC24045_REG_COMMAND, MIC24045_CIFF);
+    if (ret < 0) {
+        return ret;
+    }
+
+    return 0;
 }
 
 static int mic24045_get_voltage(const struct device *dev, int *voltage_uv)
@@ -68,7 +83,7 @@ static int mic24045_disable(const struct device *dev)
 
 static int mic24045_count_current_limits(const struct device *dev)
 {
-    return ((MIC24045_MAX_CURRENT_MA - MIC24045_MIN_CURRENT_MA) / MIC24045_CURRENT_STEP_MA) + 1;
+    return ((MIC24045_MAX_CURRENT_UA - MIC24045_MIN_CURRENT_UA) / MIC24045_CURRENT_STEP_UA) + 1;
 }
 
 static int mic24045_list_current_limit(const struct device *dev, uint32_t index, int32_t *limit_ma)
@@ -78,7 +93,7 @@ static int mic24045_list_current_limit(const struct device *dev, uint32_t index,
         return -EINVAL;
     }
 
-    *limit_ma = MIC24045_MIN_CURRENT_MA + index * MIC24045_CURRENT_STEP_MA;
+    *limit_ma = MIC24045_MIN_CURRENT_UA + index * MIC24045_CURRENT_STEP_UA;
     return 0;
 }
 
@@ -88,20 +103,58 @@ static int mic24045_set_current_limit(const struct device *dev, int32_t min_ma, 
     int desired_ma = min_ma;
 
     // Clamp to supported range
-    if (desired_ma < MIC24045_MIN_CURRENT_MA || desired_ma > MIC24045_MAX_CURRENT_MA) {
+    if (desired_ma < MIC24045_MIN_CURRENT_UA || desired_ma > MIC24045_MAX_CURRENT_UA) {
         return -EINVAL;
     }
 
-    uint8_t steps = (desired_ma - MIC24045_MIN_CURRENT_MA) / MIC24045_CURRENT_STEP_MA;
+    uint8_t steps = (desired_ma - MIC24045_MIN_CURRENT_UA) / MIC24045_CURRENT_STEP_UA;
     uint8_t reg_val = 0;
 
-    int ret = i2c_reg_read_byte_dt(&cfg->i2c, MIC24045_REG_SETTINGS2, &reg_val);
+    int ret = i2c_reg_read_byte_dt(&cfg->i2c, MIC24045_REG_SETTINGS1, &reg_val);
     if (ret < 0) return ret;
 
-    // Assuming current limit is in bits [3:0] (placeholder — check datasheet!)
-    reg_val = (reg_val & 0xF0) | (steps & 0x0F);
+     uint8_t idx = (desired_ma - MIC24045_MIN_CURRENT_UA)
+                   / MIC24045_CURRENT_STEP_UA;
 
-    return i2c_reg_write_byte_dt(&cfg->i2c, MIC24045_REG_SETTINGS2, reg_val);
+    /* 4) clear old ILIM bits, insert new bits into [7:6] */
+    reg_val = (reg_val & ~MIC24045_ILIM_MASK)
+        | (idx << MIC24045_ILIM_SHIFT);
+
+    /* 5) write it back */
+    return i2c_reg_write_byte_dt(&cfg->i2c,
+                                 MIC24045_REG_SETTINGS1,
+                                 reg_val);
+
+
+    // // Assuming current limit is in bits [3:0] (placeholder — check datasheet!)
+    // reg_val = (reg_val & 0xF0) | (steps & 0x0F);
+
+    // return i2c_reg_write_byte_dt(&cfg->i2c, MIC24045_REG_SETTINGS1, reg_val);
+}
+
+static int mic24045_get_current_limit(const struct device *dev,
+                                      int32_t *curr_ua)
+{
+    const struct mic24045_config *cfg = dev->config;
+    uint8_t reg_val;
+    int ret = i2c_reg_read_byte_dt(&cfg->i2c,
+                                   MIC24045_REG_SETTINGS1,
+                                   &reg_val);
+    if (ret < 0) {
+        return ret;
+    }
+
+    /* Extract the 2-bit ILIM<1:0> field from bits 7–6 */
+    uint8_t idx = (reg_val & MIC24045_ILIM_MASK)
+                  >> MIC24045_ILIM_SHIFT;
+
+    /* Map to the 2 A,3 A,4 A,5 A settings */
+    const int32_t limits_ma[4] = {2000, 3000, 4000, 5000};
+    int32_t current_ma = limits_ma[idx];
+
+    /* Return in μA */
+    *curr_ua = current_ma * 1000;
+    return 0;
 }
 
 
@@ -116,6 +169,15 @@ static int mic24045_init(const struct device *dev)
         return -ENODEV;
     }
 
+    // //Read status register to ensure device is responsive
+    // uint8_t status;
+    // int ret = i2c_reg_read_byte_dt(&cfg->i2c, MIC24045_REG_STATUS, &status);
+    // if (ret < 0) {
+    //     LOG_ERR("Failed to read MIC24045 status: %d", ret);
+    //     return ret;
+    // }
+    // LOG_INF("MIC24045 initialized, status: 0x%02X", status);
+
     return 0;
 }
 
@@ -129,15 +191,23 @@ static const struct regulator_driver_api mic24045_api = {
     .count_current_limits = mic24045_count_current_limits,
     .list_current_limit = mic24045_list_current_limit,
     .set_current_limit = mic24045_set_current_limit,
+    .get_current_limit = mic24045_get_current_limit,
 };
 
 #define MIC24045_DEFINE(inst) \
     static const struct mic24045_config mic24045_config_##inst = { \
+        .common = { \
+            .min_uv = DT_INST_PROP_OR(inst, regulator_min_microvolt, 640000), \
+            .max_uv = DT_INST_PROP_OR(inst, regulator_max_microvolt, 5250000), \
+            .init_uv = DT_INST_PROP_OR(inst, regulator_init_microvolt, 0), \
+            .min_ua = DT_INST_PROP_OR(inst, regulator_min_microamp, 500000), \
+            .max_ua = DT_INST_PROP_OR(inst, regulator_max_microamp, 5000000), \
+        }, \
         .i2c = I2C_DT_SPEC_INST_GET(inst) \
     }; \
     DEVICE_DT_INST_DEFINE(inst, mic24045_init, NULL, \
                           NULL, &mic24045_config_##inst, \
-                          POST_KERNEL, CONFIG_REGULATOR_INIT_PRIORITY, \
+                          POST_KERNEL, CONFIG_REGULATOR_MIC24045_INIT_PRIORITY, \
                           &mic24045_api);
 
 DT_INST_FOREACH_STATUS_OKAY(MIC24045_DEFINE)
