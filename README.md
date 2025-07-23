@@ -99,25 +99,16 @@ Add the MIC24045 to your device tree overlay (`.overlay` file):
 &i2c0 {
     status = "okay";
     
-    mic24045: regulator@69 {
-        compatible = "microchip,mic24045";
-        reg = <0x69>;  // I2C address
-        
-        // Voltage limits
-        regulator-min-microvolt = <640000>;   // 0.64V
-        regulator-max-microvolt = <5250000>;  // 5.25V
-        regulator-init-microvolt = <3300000>; // 3.3V initial
-        
-        // Current limits
-        regulator-min-microamp = <2000000>;   // 2A
-        regulator-max-microamp = <5000000>;   // 5A
-        
-        // Optional power management
-        regulator-always-on;
-        regulator-boot-on;
-        
-        status = "okay";
-    };
+	mic24045: mic24045@50 {
+		compatible = "microchip,mic24045";
+		reg = <0x50>;
+		regulator-min-microvolt = <640000>;  // 0.64V in microvolts
+    	regulator-max-microvolt = <5250000>; // 5.25V in microvolts
+		regulator-min-microamp = <500000>;    // 0.5A in microamps
+    	regulator-max-microamp = <5000000>;   // 5A in microamps
+    	regulator-always-on;
+		status = "okay";
+	};
 };
 ```
 
