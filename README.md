@@ -103,10 +103,10 @@ Add the MIC24045 to your device tree overlay (`.overlay` file):
 		compatible = "microchip,mic24045";
 		reg = <0x50>;
 		regulator-min-microvolt = <640000>;  // 0.64V in microvolts
-    	regulator-max-microvolt = <5250000>; // 5.25V in microvolts
+    		regulator-max-microvolt = <5250000>; // 5.25V in microvolts
 		regulator-min-microamp = <500000>;    // 0.5A in microamps
-    	regulator-max-microamp = <5000000>;   // 5A in microamps
-    	regulator-always-on;
+    		regulator-max-microamp = <5000000>;   // 5A in microamps
+    		regulator-always-on;
 		status = "okay";
 	};
 };
